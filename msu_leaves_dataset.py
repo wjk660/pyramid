@@ -98,7 +98,7 @@ class MSUDenseLeavesDataset(Dataset):
 #         parent_mask = scaled_m
 #     return targets, masks
 
-# @njit  # 使用numba加速
+# @njit  # 使用numba加速，对处理mask和target得到不同分辨率的label
 def multiscale_target(n_targets, target, mask):
     # targets = np.empty((self.multiscale_loss_targets, target.shape[0], target.shape[1]))
     targets = [target.astype(np.float32)]
@@ -121,7 +121,7 @@ def multiscale_target(n_targets, target, mask):
                         parent_target[i, j + 1] == 0.0 or parent_target[i + 1, j] == 0.0:
                     scaled_target[y, x] = 0.0
                     scaled_mask[y, x] = 0.0
-                # 标记叶子内部的像素
+                # mask需要标记叶子内部的像素为1
                 if parent_mask[i, j - 1] == 1.0 or parent_mask[i - 1, j] == 1.0 or \
                         parent_mask[i, j + 1] == 1.0 or parent_mask[i + 1, j] == 1.0:
                     # interior pixel
