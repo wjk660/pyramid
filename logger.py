@@ -17,6 +17,6 @@ class Logger():
 
 sys.stdout = Logger("log.txt")
 
-print("Jack Cui")
-print("https://cuijiahua.com")
-print("https://mp.weixin.qq.com/s/OCWwRVDFNslIuKyiCVUoTA")
+# print("Jack Cui")
+# print("https://cuijiahua.com")
+# print("https://mp.weixin.qq.com/s/OCWwRVDFNslIuKyiCVUoTA")

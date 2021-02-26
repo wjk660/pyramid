@@ -1,4 +1,8 @@
+import sys
+
 import torch
+
+from logger import Logger
 from utils import device
 from utils import parse_args
 from msu_leaves_dataset import MSUDenseLeavesDataset
@@ -10,6 +14,8 @@ import matplotlib.pyplot as plt
 import copy
 
 if __name__ == '__main__':
+    sys.stdout = Logger("log/evaluation.txt")
+
     # args = parse_args()
     class args:
         dataset_filepath = "/home/wangjk/dataset/DenseLeaves/gen/"

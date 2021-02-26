@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import faulthandler
+import torch.nn.functional as F
 
 class PyramidNet(nn.Module):
 
@@ -57,7 +58,15 @@ class PyramidNet(nn.Module):
         for i, layer in enumerate(self.upsample_blocks[1:]):
             # sum map coming from correspondent downsample layer  来自对应的下采样层
             # print(x.shape, downsampled[-i-1].shape)
-            x = x + downsampled[-i - 1]  # todo concat here?
+            x1=x
+            x2=downsampled[-i - 1]
+            diffY = torch.tensor([x2.size()[2] - x1.size()[2]])
+            diffX = torch.tensor([x2.size()[3] - x1.size()[3]])
+
+            x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                            diffY // 2, diffY - diffY // 2])
+            # x = x + downsampled[-i - 1]  # todo concat here?
+            x = x1 + x2  # todo concat here?
             x = layer(x)
             # store current resolution prediction (apply RC block first) 存储当前分辨率下的预测
             multiscale_predictions.append(self.pre_loss_convs[i](x))

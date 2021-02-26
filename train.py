@@ -1,5 +1,9 @@
+import sys
+
 import torch.nn as nn
 import torch
+
+from logger import Logger
 from utils import device
 from utils import parse_args
 from msu_leaves_dataset import MSUDenseLeavesDataset
@@ -33,6 +37,7 @@ def evaluate(net, eval_dataset):
 
 
 if __name__ == '__main__':
+    sys.stdout = Logger("log/train.txt")
     class args:
         dataset_filepath = "/home/wangjk/dataset/DenseLeaves/gen/"
         epochs = 50
@@ -80,7 +85,7 @@ if __name__ == '__main__':
             # print("Input shape:", input_batch.shape)
             predictions = model(input_batch)
 
-            if batch_no % 10 == 0:
+            if batch_no % 10 == 0:  # predictions[-1]是分辨率最高的那个
                 print('\n',predictions[-1].max().item(), predictions[-1].min().item(), predictions[-1].sum().item())
                 print('\n',torch.sigmoid(predictions[-1]).max().item(), torch.sigmoid(predictions[-1]).min().item(),
                       torch.sigmoid(predictions[-1]).sum().item())

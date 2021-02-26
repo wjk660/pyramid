@@ -7,7 +7,7 @@ import random
 import torchvision.transforms.functional as TF
 import torchvision.transforms as transforms
 from numba import njit
-
+import matplotlib.pyplot as plt
 
 class MSUDenseLeavesDataset(Dataset):
 
@@ -77,7 +77,7 @@ class MSUDenseLeavesDataset(Dataset):
         # reverse order of multiscale labels (long cast for CE loss)
         return image, [torch.from_numpy(t).unsqueeze(0) for t in reversed(targets)], [torch.from_numpy(m).unsqueeze(0)
                                                                                       for m in reversed(
-                masks)]  # unsqueeze在指定维度进行维度扩充
+                masks)]  # unsqueeze在指定维度进行维度扩充,reversed反转之后应该是从低分辨率到高分辨率吧
 
 
 # normal multiscale does not achieve same results
@@ -98,7 +98,7 @@ class MSUDenseLeavesDataset(Dataset):
 #         parent_mask = scaled_m
 #     return targets, masks
 
-# @njit  # 使用numba加速，对处理mask和target得到不同分辨率的label
+@njit  # 使用numba加速，对处理mask和target得到不同分辨率的label
 def multiscale_target(n_targets, target, mask):
     # targets = np.empty((self.multiscale_loss_targets, target.shape[0], target.shape[1]))
     targets = [target.astype(np.float32)]
@@ -135,7 +135,7 @@ def multiscale_target(n_targets, target, mask):
 
 
 if __name__ == '__main__':
-    dataset = MSUDenseLeavesDataset('/home/wangjk/dataset/DenseLeaves/gen/train/', num_targets=5,
+    dataset = MSUDenseLeavesDataset('/home/wangjk/dataset/DenseLeaves/train/', num_targets=5,
                                     random_augmentation=True,
                                     augm_probability=1.0)
     dataloader = DataLoader(dataset, batch_size=24)
@@ -143,18 +143,25 @@ if __name__ == '__main__':
     print(len(dataset))
     img, l, m = dataset[10]
     print(img.shape)  # , l.shape, m.shape)
-    img = img.permute(1, 2, 0).numpy() * 255  # permute循环排列参数。
+    img = img.permute(1, 2, 0).numpy() * 255  # permute改变参数顺序
     img = img.astype(np.uint8)
     print(img.shape)
-    cv2.imshow('img', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    plt.imshow(img)
+    plt.show()
+    # cv2.imshow('img', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     cv2.waitKey(0)
     for target, mask in zip(l, m):
         target = target.squeeze().numpy()
         mask = mask.squeeze().numpy()
         print(target.shape, mask.shape)
-        cv2.imshow('imga', target)
-        cv2.imshow('imgb', mask)
-        cv2.waitKey(0)
+        plt.imshow(target)
+        plt.show()
+        plt.imshow(mask)
+        plt.show()
+        # cv2.imshow()在服务器上不能正常运行
+        # cv2.imshow('imga', target)
+        # cv2.imshow('imgb', mask)
+        # cv2.waitKey(0)
     # cv2.imshow('labels', l.numpy().astype(np.uint8)*255)
     # cv2.waitKey(0)
     # cv2.imshow('mask',  m.numpy().astype(np.uint8)*255)

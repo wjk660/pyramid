@@ -7,14 +7,18 @@ from pyramid_network import PyramidNet
 import numpy as np
 import matplotlib.pyplot as plt
 import faulthandler
+from logger import Logger
+import sys
 
 if __name__ == '__main__':
+
+    sys.stdout = Logger("log/custom_image.txt")
     faulthandler.enable()  # 报错时能看到原因
     # args = parse_args()
     # args={"load_model":'pyramid_net_model.pt',"image":'DJI_0986.JPG',"save_path":""}
     class args:
         load_model='/home/wangjk/project/pyramid/epoch50_pyramid_net.pt'
-        image="DJI_0986.JPG"
+        image="/home/wangjk/project/pyramid/testPic/test.JPG"
         save_path=""
 
     # todo totally arbitrary weights
@@ -29,8 +33,8 @@ if __name__ == '__main__':
     model = model.to(device)
 
     og_image = cv2.imread(args.image)
-    if og_image.shape[0] > 1024 and og_image.shape[1]>1024:
-        og_image = og_image[(og_image.shape[0]-1024)//2:og_image.shape[0]-(og_image.shape[0]-1024)//2, (og_image.shape[1]-1024)//2:og_image.shape[1]-(og_image.shape[1]-1024)//2, :]
+    # if og_image.shape[0] > 1024 and og_image.shape[1]>1024:  # 从中间取1024*1024大小的图像
+    #     og_image = og_image[(og_image.shape[0]-1024)//2:og_image.shape[0]-(og_image.shape[0]-1024)//2, (og_image.shape[1]-1024)//2:og_image.shape[1]-(og_image.shape[1]-1024)//2, :]
     # resize image or crop patches
     # image = cv2.resize(og_image, (128, 128))
     og_image = cv2.cvtColor(og_image, cv2.COLOR_BGR2RGB)
@@ -40,11 +44,11 @@ if __name__ == '__main__':
     model.eval()  # 设置为evaluation模式
     with torch.no_grad():
         predictions = model(image.unsqueeze(0))
-        # get prediction at max resolution
+        # get prediction at max resolution predictions本身返回的是多个分辨率都有的，现在只保留最高的分辨率那个，因为实验表明这个最好
         p = predictions[-1]
         # sigmoid + thresholding
-        p = (p > 0.).float()
-        p = p.squeeze().cpu().numpy().astype(np.float32)
+        p = (p > 0.).float() # 如果大于0，则置为1
+        p = p.squeeze().cpu().numpy().astype(np.float32)  # p变成2维的了
         cv2.imwrite(os.path.join(args.save_path, 'custom_prediction.png'), (p * 255).astype(np.uint8))
         print(p.shape)
         # fix, ax = plt.subplots(1, 2)
@@ -54,7 +58,7 @@ if __name__ == '__main__':
         plt.imshow(og_image,alpha=0.7)
         plt.imshow(p,alpha=0.3)
         # plt.legend(['ax[0]','ax[1]'])
-        plt.savefig("DJI_0986_seg_labserver.JPG")
+        plt.savefig("/home/wangjk/project/pyramid/testPic/test_seg_labserver.JPG")
         plt.show()
 
 

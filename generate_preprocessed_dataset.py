@@ -33,11 +33,11 @@ def generate_patches_from_image(image, segm_map, mask, patch_size, filename, thr
 
 
 # generate binary edges and mask from instance segmentation
-@jit(nopython=True)
+# @jit(nopython=True)
 def generate_edges_and_mask(image):
     # weird way to process it but this is how it was intended (took a while to figure it out..) 处理的方式很奇怪，但本来就是这样的
     segm = np.empty((image.shape[0], image.shape[1])).astype(np.int32)
-    segm = image[:, :, 0] + 256 * image[:, :, 1] + 256 * 256 * image[:, :, 2]
+    segm = image[:, :, 0] + 256 * image[:, :, 1] + 256 * 256 * image[:, :, 2]  # ??为什么？
     new_segm = np.zeros(segm.shape)
     mask = np.zeros(segm.shape)
     for i in range(1, segm.shape[0] - 1):
@@ -54,18 +54,23 @@ def generate_edges_and_mask(image):
 
 if __name__ == '__main__':
     # go through dataset and generate binary edge leaves from instance segmentation labels
-    parser = ArgumentParser()
-    parser.add_argument('-d', '--dataset', help='Path to the original dataset (avoid final slash / in name)', required=True, type=str)
-    parser.add_argument('-p', '--patch-size', type=tuple, default=(128, 128), help='Size of the cropped patches (default: 128x128)')
-    parser.add_argument('-s', '--subdir', type=str, default='train',
-                        help='Subdirectory to process, assuming original dataset organization', choices=['train', 'val', 'test'])
-    parser.add_argument('-o', '--output-dir', help='Where to write new dataset to')
-    args = parser.parse_args()
+    # parser = ArgumentParser()
+    # parser.add_argument('-d', '--dataset', help='Path to the original dataset (avoid final slash / in name)', required=True, type=str)
+    # parser.add_argument('-p', '--patch-size', type=tuple, default=(128, 128), help='Size of the cropped patches (default: 128x128)')
+    # parser.add_argument('-s', '--subdir', type=str, default='train',
+    #                     help='Subdirectory to process, assuming original dataset organization', choices=['train', 'val', 'test'])
+    # parser.add_argument('-o', '--output-dir', help='Where to write new dataset to')
+    # args = parser.parse_args()
     # print(args.dataset,args.patch_size,args.subdir,args.output_dir,sys.argv)
-    if not len(sys.argv) > 1:
-        print(
-            f"Usage: {sys.argv[0]} -d dataset_directory_root (expecting train/val/test inside) [patch_size] [subdir_to_process] [output_directory]")
-        exit(-1)
+    class args:
+        dataset = "/home/wangjk/dataset/DenseLeaves"
+        subdir = "train"
+        patch_size = (128, 128)
+        output_dir = "/home/wangjk/dataset/DenseLeaves/gen/train"
+    # if not len(sys.argv) > 1:
+    #     print(
+    #         f"Usage: {sys.argv[0]} -d dataset_directory_root (expecting train/val/test inside) [patch_size] [subdir_to_process] [output_directory]")
+    #     exit(-1)
 
     dirname = 'leaves_edges'
     if not args.output_dir and not os.path.exists(os.path.join(args.dataset, dirname)):  # ！!如果没有提前设好放数据的文件夹
