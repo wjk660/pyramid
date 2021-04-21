@@ -63,10 +63,11 @@ if __name__ == '__main__':
     # args = parser.parse_args()
     # print(args.dataset,args.patch_size,args.subdir,args.output_dir,sys.argv)
     class args:
-        dataset = "/home/wangjk/dataset/DenseLeaves"
-        subdir = "train"
-        patch_size = (128, 128)
-        output_dir = "/home/wangjk/dataset/DenseLeaves/gen/train"
+        dataset = "/home/wangjk/dataset/DenseLeaves/"
+        subdir = ["train","val","own_train","own_test"]
+        patch_size = (256, 256)
+        output_dir = "/home/wangjk/dataset/DenseLeaves/gen"
+        output_subdir=["train","val"]
     # if not len(sys.argv) > 1:
     #     print(
     #         f"Usage: {sys.argv[0]} -d dataset_directory_root (expecting train/val/test inside) [patch_size] [subdir_to_process] [output_directory]")
@@ -81,7 +82,10 @@ if __name__ == '__main__':
     threshold = 3800
     # print(args.subdir, args.dataset)
     # 循环处理没有旋转的图片
-    for filename in tqdm.tqdm(glob.glob(args.dataset + f'/{args.subdir}/*000_seg.png')): # tqdm用于显示进度条
+    # for filename in tqdm.tqdm(glob.glob(args.dataset + f'/{args.subdir}/*000_seg.png')): # tqdm用于显示进度条
+    origin_dataset_path=args.dataset+args.subdir[0]
+    target_dataset_path=args.output_dir+args.subdir[0]
+    for filename in tqdm.tqdm(glob.glob(args.dataset + f'/{args.subdir}/*_seg.png')):  # tqdm用于显示进度条
         # print(filename, dataset, dirname, os.path.join(dataset, dirname))
         # print(filename)
         label = cv2.imread(filename)

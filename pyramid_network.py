@@ -3,10 +3,12 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import faulthandler
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
+
 
 class PyramidNet(nn.Module):
 
-    def __init__(self, n_layers, input_image_channels=3, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
+    def __init__(self, n_layers, input_image_channels=, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
         super(PyramidNet, self).__init__()
         # fixed number of channels throughout the network 网络中固定的通道数量
         self.no_channels = 32
@@ -22,7 +24,7 @@ class PyramidNet(nn.Module):
         for i in range(n_layers):
             self.upsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
             self.downsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
-            self.pre_loss_convs.append(nn.Sequential(
+            self.pre_loss_convs.append(nn.Sequential( #todo:为什么用这个计算loss
                 nn.ReLU(inplace=False),
                 nn.Conv2d(self.no_channels, output_channels, 3, padding=1)  # todo 1x1 conv instead?
             ))
@@ -34,7 +36,7 @@ class PyramidNet(nn.Module):
         self.pre_loss_convs = nn.ModuleList(self.pre_loss_convs)
 
         # have one loss per output 损失 BCEWithLogitsLoss是sigmoid加上交叉熵BCE
-        self.losses = [nn.BCEWithLogitsLoss(pos_weight=lw, reduction='none') for lw in loss_weights]
+        self.losses = [nn.BCEWithLogitsLoss(pos_weight=lw, reduction='none') for lw in loss_weights] #todo:?
         self.losses = nn.ModuleList(self.losses)
         # self.loss = nn.CrossEntropyLoss(weight=loss_weights)  # softmax inside
 
@@ -55,11 +57,11 @@ class PyramidNet(nn.Module):
         x = self.upsample_blocks[0](x)
         x = nn.Upsample(scale_factor=2.0, mode='nearest')(x)
         # [print(d.shape) for d in downsampled]
-        for i, layer in enumerate(self.upsample_blocks[1:]):
+        for i, layer in enumerate(self.upsample_blocks[1:]):# upsample_blocks[0]是最顶端的结构，没有求和操作
             # sum map coming from correspondent downsample layer  来自对应的下采样层
             # print(x.shape, downsampled[-i-1].shape)
             x1=x
-            x2=downsampled[-i - 1]
+            x2=downsampled[-i - 1]  # -1,-2,-3,-4,-5
             diffY = torch.tensor([x2.size()[2] - x1.size()[2]])
             diffX = torch.tensor([x2.size()[3] - x1.size()[3]])
 
@@ -88,8 +90,8 @@ class PyramidNet(nn.Module):
     # A mask is applied to the loss so that unlabeled pixels are ignored.将掩码应用于损失，以便忽略未标记的像素。
     def compute_multiscale_loss(self, multiscale_prediction, multiscale_targets, multiscale_masks):
         # reduction logic: mask is applied afterwards on the non-reduced loss
-        losses = [torch.sum(self.losses[i](x, y) * mask) / torch.sum(mask) for i, (x, y, mask) in
-                  enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks))]
+        losses = [torch.sum(self.losses[i](x, y) * mask) / torch.sum(mask) for i, (x, y, mask) in  # loss计算：loss(input, target)
+                  enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks))]# todo：为什么这么计算loss
         # here sum will call overridden + operator
         return sum(losses)
 
@@ -98,6 +100,8 @@ if __name__ == '__main__':
     faulthandler.enable()
     net = PyramidNet(5, loss_weights=[torch.tensor([0.1]), torch.tensor([0.4]), torch.tensor([1.]),
                                       torch.tensor([4]), torch.tensor([10])])
+    writer = SummaryWriter('runs/pyramid_network')
+    writer.add_graph(net)
     # print(net)
     with torch.no_grad():
         x = torch.randn((2, 3, 128, 128), requires_grad=True)
