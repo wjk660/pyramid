@@ -12,7 +12,7 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-
+from unet_model import UNet
 if __name__ == '__main__':
     sys.stdout = Logger("log/evaluation.txt")
     print("add own pic add_own_pic_epoch100pyramid_net.pt")
@@ -33,8 +33,9 @@ if __name__ == '__main__':
     eval_dataloader = DataLoader(MSUDenseLeavesDataset(args.dataset_filepath + 'val/', args.predictions_number),
                                  shuffle=False, batch_size=4)
     # todo totally arbitrary weights
-    model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.9]), torch.tensor([3.9]),
+    # model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.9]), torch.tensor([3.9]),
                                                  # torch.tensor([8]), torch.tensor([10])])
+    model=UNet(n_channels=3, n_classes=1, bilinear=True)
     if args.load_model:
         model.load_state_dict(torch.load(args.load_model))
     else:

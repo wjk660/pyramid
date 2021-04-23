@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 class PyramidNet(nn.Module):
 
-    def __init__(self, n_layers, input_image_channels=, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
+    def __init__(self, n_layers, input_image_channels=3, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
         super(PyramidNet, self).__init__()
         # fixed number of channels throughout the network 网络中固定的通道数量
         self.no_channels = 32

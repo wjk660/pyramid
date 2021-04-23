@@ -15,11 +15,11 @@ class MSUDenseLeavesDataset(Dataset):
     def __init__(self, filepath, num_targets, random_augmentation=False, augm_probability=0.2):  # num_targets=5,
         self.filepath = filepath
         # each sample is made of image-labels-mask (important to sort by name!)
-        self.images = sorted(glob.glob(filepath + '*_img.png'))
-        self.labels = sorted(glob.glob(filepath + '*_label.png'))
-        self.masks = sorted(glob.glob(filepath + '*_mask.png'))
+        self.images = sorted(glob.glob(filepath + '/*_img.png'))
+        self.labels = sorted(glob.glob(filepath + '/*_label.png'))
+        self.masks = sorted(glob.glob(filepath + '/*_mask.png'))
         self.n_samples = len(self.images)
-        print("filepath + '*_img.png':", filepath + '*_img.png', "len(self.images):", self.n_samples)
+        print("filepath + '*_img.png':", filepath + '/*_img.png', "len(self.images):", self.n_samples)
         self.multiscale_loss_targets = num_targets
         self.augmentation = random_augmentation
         self.probability = augm_probability
@@ -27,17 +27,34 @@ class MSUDenseLeavesDataset(Dataset):
     def __len__(self):
         return self.n_samples
 
-    def __getitem__(self, item):  # item这个下标对应的image，label，mask
+    def __getitem__(self, item):  # item这个下标对应的image，label，mask，返回的就是图片，只不过格式好像是tensor的
         # read image-labels-mask and return them
         image = cv2.imread(self.images[item])
+        # 测试增加灰度处理，转为单通道
+        imggray = cv2.imread(self.images[item], 0)
+        # plt.imshow(imggray, cmap='gray')
+        # plt.show()
+        imgLap = cv2.Laplacian(imggray, cv2.CV_16S)
+        # plt.imshow(imgLap)
+        # plt.show()
+        imgLapDelta = cv2.convertScaleAbs(imgLap)
+        # plt.imshow(imgLapDelta)
+        # plt.show()
+        # Laplace Add
+        imgLapAdd = cv2.addWeighted(imggray, 1.0, imgLap, -1.0, 0, dtype=cv2.CV_32F)
+        imgLapAdd = cv2.convertScaleAbs(imgLapAdd)
+        # print(image.shape)
+        imgLapAdd = cv2.cvtColor(imgLapAdd, cv2.COLOR_GRAY2RGB)
+        image = torch.from_numpy(imgLapAdd.transpose(2, 0, 1) / 255.).float()
+        # 测试结束
         label = cv2.imread(self.labels[item])
         mask = cv2.imread(self.masks[item])
         # HxWxC-->CxHxW, bgr->rgb and tensor transformation opencv读到的是hwc
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = torch.from_numpy(image.transpose(2, 0, 1) / 255.).float()
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = torch.from_numpy(image.transpose(2, 0, 1) / 255.).float()
 
         # todo bug in generating dataset made following map have 3 (identical)
-        #  channels instead of 1
+        #  channels instead of 1，改成 最大类间方差法
         label = label[:, :, 0] / 255.
         mask = mask[:, :, 0] / 255.
         # label = torch.from_numpy(label).long()
@@ -61,6 +78,7 @@ class MSUDenseLeavesDataset(Dataset):
                         trans.append(transforms.RandomVerticalFlip(1.0))  # 以给定的概率垂直翻转给定的图像。
                     if flip_rnd > (1 - 0.4):
                         trans.append(transforms.RandomHorizontalFlip(1.0))
+                    trans.append(transforms.RandomAffine(degrees=30, translate=(0, 0.2)))
                     trans.append(transforms.ToTensor())
                     flip = transforms.Compose(trans)
 
@@ -69,7 +87,7 @@ class MSUDenseLeavesDataset(Dataset):
                 image = rotate(image, angle)
                 label = rotate(torch.from_numpy(label).float(),
                                angle).squeeze().numpy()  # 作用：从数组的形状中删除单维度条目，即把shape中为1的维度去掉
-                mask = rotate(torch.from_numpy(mask).float(), angle).squeeze().numpy()
+                mask = rotate(torch.from_numpy(mask).float(), angle).squeeze().numpy()# todo:这里label和mask变成二值图了？
 
         # print((label.shape, mask.shape), (label.dtype, mask.dtype))
         # labels multiscale resizing
@@ -135,24 +153,24 @@ def multiscale_target(n_targets, target, mask):
 
 
 if __name__ == '__main__':
-    dataset = MSUDenseLeavesDataset('/home/wangjk/dataset/DenseLeaves/train/', num_targets=5,
+    dataset = MSUDenseLeavesDataset('/home/wangjk/dataset/DenseLeaves/gen/train/', num_targets=5,
                                     random_augmentation=True,
                                     augm_probability=1.0)
     dataloader = DataLoader(dataset, batch_size=24)
 
     print(len(dataset))
-    img, l, m = dataset[10]
-    print(img.shape)  # , l.shape, m.shape)
+    img, l, m = dataset[1] #l: torch.Size([1, 16, 16])
+    print(img.shape)  # , l.shape, m.shape)   torch.Size([3, 256, 256])
     img = img.permute(1, 2, 0).numpy() * 255  # permute改变参数顺序
     img = img.astype(np.uint8)
     print(img.shape)
     plt.imshow(img)
     plt.show()
     # cv2.imshow('img', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    cv2.waitKey(0)
-    for target, mask in zip(l, m):
-        target = target.squeeze().numpy()
-        mask = mask.squeeze().numpy()
+    # cv2.waitKey(0)
+    for target, mask in zip(l, m): # 分辨率由低到高
+        target = target.squeeze().numpy() #shape:（16，16）
+        mask = mask.squeeze().numpy() #(16, 16)
         print(target.shape, mask.shape)
         plt.imshow(target)
         plt.show()
