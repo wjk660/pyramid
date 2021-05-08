@@ -21,6 +21,7 @@ import args
 def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_load_model):
     if model:
         print("has model")
+        print(dirpath_orginpics,bin_outputPath,path_load_model,name_load_model)
     else:
         print("Please provide a valid model to evaluate")
         exit(1)
@@ -32,6 +33,7 @@ def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_loa
     model.eval()  # 设置为evaluation模式
     list_imgsPath = [image_test for image_test in glob.glob(dirpath_orginpics + "/*.JPG")]  # 读出所有文件夹的路径
     for i in range(len(list_imgsPath)):
+        print("dingwei1")
         image = cv2.imread(list_imgsPath[i])
         if args.is_ruihua:
             # 增加灰度处理，转为单通道
@@ -49,7 +51,9 @@ def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_loa
         image_opencv=image.copy()
         image = torch.from_numpy(image.transpose(2, 0, 1) / 255.).float()
         image = image.to(device)
+        print("dingwei2")
         with torch.no_grad():
+            print("dingwei3")
             predictions = model(image.unsqueeze(0))
             # get prediction at max resolution predictions本身返回的是多个分辨率都有的，现在只保留最高的分辨率那个，因为实验表明这个最好
             p = predictions[-1]
@@ -62,6 +66,7 @@ def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_loa
             mask_inv=cv2.bitwise_not(res_binImg)
             res_mixImg = cv2.bitwise_and(image_opencv,image_opencv, mask=mask_inv)
             cv2.imwrite(os.path.join(bin_outputPath,f'{name_load_model}-mix-{Name_binImg}' ), res_mixImg)
+            print("dingwei4")
     print("finish testPic sucessfully!")
     exit(0)
 if __name__ == '__main__':
@@ -81,7 +86,7 @@ if __name__ == '__main__':
 
     # 改名字
     # for jsonfile in origin_folders_paths:
-    loadModelName = "04-28_09-37Size224Epoch199"
+    loadModelName = "05-05_15-06Size224Best"
     load_model = f'/home/wangjk/project/pyramid/modelParameter/{loadModelName}.pt'
     # pic_name = "测试专用.JPG"
     # pic_prefix = pic_name.split('.')[0]
@@ -90,12 +95,10 @@ if __name__ == '__main__':
     describe = f"epoch{train.args.epochs},patch_size = {train.args.patch_size}*{train.args.patch_size},add three pic that labeled all leaves"
 
     # todo totally arbitrary weights
-    model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.9]), torch.tensor([3.9]),
-    # model = PyramidNet(n_layers=5,
-    #                    loss_weights=[torch.tensor([0.2]), torch.tensor([0.4]), torch.tensor([0.6]), torch.tensor([0.8]),
-    #                                  torch.tensor([1.0])])  # , torch.tensor([1.1]), torch.tensor([1.8]),
-
-    device=torch.device("cuda:0")
+    # model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.9]), torch.tensor([3.9]),
+    model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0]), torch.tensor([1.0]), torch.tensor([1.0]),
+                                                 torch.tensor([1.0]), torch.tensor([0.1])])#
+    device=torch.device("cuda:1")
     model = model.to(device)
     test_picture(origin_path,bin_path,model,load_model,loadModelName)
 
