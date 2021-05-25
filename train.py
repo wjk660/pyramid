@@ -3,9 +3,7 @@ import sys
 import testPic
 # import torch.nn as nn
 import time
-
 import torch
-
 from logger import Logger
 from utils import device
 from utils import parse_args
@@ -38,22 +36,22 @@ def evaluate(net, eval_dataset):
             print('Eval Loss:', loss.item())
             # pixel-wise accuracy of multiscale predictions (edges-only)
 
-            # for p, t, m in zip(predictions, targets, masks):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
-            #
-            #     p = (p>0.).float()
-            #     pixel_acc = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
-            #     acc = pixel_acc.sum() / t.sum()
-            #     # 注释掉多余的日志，方便定位问题
-            #     # print(f"Accuracy at scale in valset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
-            #     count = count + 1
-            #     sum_acc=sum_acc+acc
-            p = predictions[-1]
-            t = targets[-1]
-            m = masks[-1]
-            pixel_acc = (p * m) * t
-            acc = pixel_acc.sum() / t.sum()
-            count = count + 1
-            sum_acc = sum_acc + acc
+            for p, t, m in zip(predictions, targets, masks):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
+
+                p = (p>0.).float()
+                pixel_acc = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
+                acc = pixel_acc.sum() / t.sum()
+                # 注释掉多余的日志，方便定位问题
+                # print(f"Accuracy at scale in valset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
+                count = count + 1
+                sum_acc=sum_acc+acc
+            # p = predictions[-1]
+            # t = targets[-1]
+            # m = masks[-1]
+            # pixel_acc = (p * m) * t
+            # acc = pixel_acc.sum() / t.sum()
+            # count = count + 1
+            # sum_acc = sum_acc + acc
     writer_acc_val.add_scalar('acc',
       sum_acc/count,
       global_step=epoch)
@@ -63,8 +61,36 @@ def evaluate(net, eval_dataset):
     print('*'*50)
     # net.train() # 没用吧
 
+def evaluate_experiment(net, eval_dataset):
+    net.eval()
+    count = 0
+    sum_recall = 0
+    with torch.no_grad():
+        for batch_no, (image, targets, masks) in tqdm(enumerate(eval_dataset)):
+            image = image.to(device)
+            targets = [t.to(device) for t in targets]
+            masks = [t.to(device) for t in masks]
+            predictions = net(image)
+            loss = net.compute_multiscale_loss(predictions, targets, masks)
+            print('Eval Loss:', loss.item())
 
-# args = parse_args()
+            for p, t, m in zip(predictions, targets, masks):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
+                p = (p>0.).float()
+                pixel_recall = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
+                recall = pixel_recall.sum() / t.sum()
+                # print(f"Accuracy at scale in valset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
+                count = count + 1
+                sum_recall=sum_recall+recall
+
+    writer_acc_val.add_scalar('acc',
+      sum_recall/count,
+      global_step=epoch)
+    writer_loss_val.add_scalar('loss',
+                      loss.item(),
+                      global_step=epoch)
+
+    print('*'*50)
+    # net.train() # 没用吧
 
 if __name__ == '__main__':
     print(f"start_train:{time.localtime()}")
@@ -80,7 +106,7 @@ if __name__ == '__main__':
         raise RuntimeError("not have valset")
 
     # create dataloader
-    dataset_train = MSUDenseLeavesDataset(trainset_path, args.predictions_number,random_augmentation=True)#是否旋转
+    dataset_train = MSUDenseLeavesDataset(trainset_path, args.predictions_number,random_augmentation=True)
     dataloader = DataLoader(dataset_train, batch_size=args.batch_size)
     dataset_val=MSUDenseLeavesDataset(valset_path, args.predictions_number,random_augmentation=False)
     eval_dataloader = DataLoader(dataset_val,batch_size=args.batch_size)
@@ -155,8 +181,8 @@ if __name__ == '__main__':
             # visualize result
             if viz:
                 with torch.no_grad():
-                    predictions = model(input_batch)
-                    p = predictions[-1][10, :, :, :]
+                    predictions = model(input_batch) # 应该可以注释掉，上面已经出现过一次了
+                    p = predictions[-1][10, :, :, :] # 只显示最高分辨率的一个
                     # p = (torch.nn.functional.sigmoid(p) > .5).float()
                     # avoid using sigmoid, it's the same thing
                     print(p.shape, p.max().item(), p.min().item(), p.sum().item())
@@ -166,28 +192,28 @@ if __name__ == '__main__':
 
                     plt.imshow(p, cmap='Greys')
                     plt.show()
-            # for p, t, m in zip(predictions, targets, masks):  # predictions是模型的输出，值是0.265这种，targets和 masks是标签和掩码，值是0或1
-            #
-            #     p = (p > 0.).float()
-            #     pixel_acc = (p * m) * t  # 先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
-            #     acc = pixel_acc.sum() / t.sum()
-            #     # 注释掉多余的输出，方便查看日志
-            #     # print(
-            #     #     f"Accuracy at scale in trainset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
-            #     count = count + 1
-            #     sum_acc = sum_acc + acc
-            p=predictions[-1]
-            t=targets[-1]
-            m=masks[-1]
-            pixel_acc = (p * m) * t
-            acc=pixel_acc.sum() / t.sum()
-            count = count + 1
-            sum_acc = sum_acc + acc
+            for p, t, m in zip(predictions, targets, masks):  # predictions是模型的输出，值是0.265这种，targets和 masks是标签和掩码，值是0或1
 
-        writer_acc_train.add_scalar('acc',
+                p = (p > 0.).float()
+                pixel_acc = (p * m) * t  # 先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
+                acc = pixel_acc.sum() / t.sum()
+                # 注释掉多余的输出，方便查看日志
+                # print(
+                #     f"Accuracy at scale in trainset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
+                count = count + 1
+                sum_acc = sum_acc + acc
+            # p=predictions[-1]
+            # t=targets[-1]
+            # m=masks[-1]
+            # pixel_acc = (p * m) * t # 逐像素乘法
+            # acc=pixel_acc.sum() / t.sum()
+            # count = count + 1
+            # sum_acc = sum_acc + acc
+
+        writer_acc_train.add_scalar(f'recall/{args.prefix_of_modelName}',
                                     sum_acc / count,
                                     global_step=epoch)
-        writer_loss_train.add_scalar('loss',
+        writer_loss_train.add_scalar(f'loss/{args.prefix_of_modelName}',
                           loss.item(),
                           global_step=epoch)
         evaluate(model, eval_dataloader)
