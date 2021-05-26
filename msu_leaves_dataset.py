@@ -8,7 +8,11 @@ import torchvision.transforms.functional as TF
 import torchvision.transforms as transforms
 from numba import njit
 import matplotlib.pyplot as plt
+import ruihua
+import args
 
+# 输入：指定图像路径、mask和label的分辨率个数、是否数据增强、增强概率
+# 输出：img的tensor，label和mask的tensor数组（5个分辨率），他们都是c*h*w,三通道，值为0 或者 1.0
 class MSUDenseLeavesDataset(Dataset):
 
     # 初始化文件名路径和文件名列表
@@ -31,27 +35,24 @@ class MSUDenseLeavesDataset(Dataset):
         # read image-labels-mask and return them
         image = cv2.imread(self.images[item])
         # 测试增加灰度处理，转为单通道
-        imggray = cv2.imread(self.images[item], 0)
-        # plt.imshow(imggray, cmap='gray')
-        # plt.show()
-        imgLap = cv2.Laplacian(imggray, cv2.CV_16S)
-        # plt.imshow(imgLap)
-        # plt.show()
-        imgLapDelta = cv2.convertScaleAbs(imgLap)
-        # plt.imshow(imgLapDelta)
-        # plt.show()
-        # Laplace Add
-        imgLapAdd = cv2.addWeighted(imggray, 1.0, imgLap, -1.0, 0, dtype=cv2.CV_32F)
-        imgLapAdd = cv2.convertScaleAbs(imgLapAdd)
-        # print(image.shape)
-        imgLapAdd = cv2.cvtColor(imgLapAdd, cv2.COLOR_GRAY2RGB)
-        image = torch.from_numpy(imgLapAdd.transpose(2, 0, 1) / 255.).float()
-        # 测试结束
+        if args.is_ruihua:
+            imggray = cv2.imread(self.images[item], 0)
+            imgLap = cv2.Laplacian(imggray, cv2.CV_16S)
+            imgLapDelta = cv2.convertScaleAbs(imgLap)
+
+            # Laplace Add
+            imgLapAdd = cv2.addWeighted(imggray, 1.0, imgLap, -1.0, 0, dtype=cv2.CV_32F)
+            imgLapAdd = cv2.convertScaleAbs(imgLapAdd)
+            # print(image.shape)
+            imgLapAdd = cv2.cvtColor(imgLapAdd, cv2.COLOR_GRAY2RGB)
+            image = torch.from_numpy(imgLapAdd.transpose(2, 0, 1) / 255.).float()
+            # 测试结束
+        # HxWxC-->CxHxW, bgr->rgb and tensor transformation opencv读到的是hwc
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = torch.from_numpy(image.transpose(2, 0, 1) / 255.).float()
         label = cv2.imread(self.labels[item])
         mask = cv2.imread(self.masks[item])
-        # HxWxC-->CxHxW, bgr->rgb and tensor transformation opencv读到的是hwc
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # image = torch.from_numpy(image.transpose(2, 0, 1) / 255.).float()
+
 
         # todo bug in generating dataset made following map have 3 (identical)
         #  channels instead of 1，改成 最大类间方差法
@@ -117,7 +118,7 @@ class MSUDenseLeavesDataset(Dataset):
 #     return targets, masks
 
 @njit  # 使用numba加速，对处理mask和target得到不同分辨率的label
-def multiscale_target(n_targets, target, mask):
+def multiscale_target(n_targets, target, mask):  # target和mask是两维的numpy数组，值为0~1.0
     # targets = np.empty((self.multiscale_loss_targets, target.shape[0], target.shape[1]))
     targets = [target.astype(np.float32)]
     masks = [mask.astype(np.float32)]
@@ -149,17 +150,19 @@ def multiscale_target(n_targets, target, mask):
         masks.append(scaled_mask)
         parent_target = scaled_target
         parent_mask = scaled_mask
+    # targets = [targets[-1],targets[-1],targets[-1],targets[-1],targets[-1]]
+    # masks = [masks[0],masks[0],masks[0],masks[0],masks[0]]
     return targets, masks
 
 
 if __name__ == '__main__':
-    dataset = MSUDenseLeavesDataset('/home/wangjk/dataset/DenseLeaves/gen/train/', num_targets=5,
+    dataset = MSUDenseLeavesDataset('/home/wangjk/project/pyramid/data/gen/own_train224/', num_targets=5,
                                     random_augmentation=True,
                                     augm_probability=1.0)
     dataloader = DataLoader(dataset, batch_size=24)
 
     print(len(dataset))
-    img, l, m = dataset[1] #l: torch.Size([1, 16, 16])
+    img, l, m = dataset[1] #l: torch.Size([1, 16, 16]) CxHxW
     print(img.shape)  # , l.shape, m.shape)   torch.Size([3, 256, 256])
     img = img.permute(1, 2, 0).numpy() * 255  # permute改变参数顺序
     img = img.astype(np.uint8)

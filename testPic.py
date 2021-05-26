@@ -18,6 +18,7 @@ import shutil
 import ruihua
 import args
 
+# 作用：根据模型和训练好的模型参数，将指定路径dirpath_orginpics中的所有图片预测出边缘存到bin_outputPath
 def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_load_model):
     if model:
         print("has model")
@@ -30,6 +31,8 @@ def test_picture(dirpath_orginpics,bin_outputPath,model,path_load_model,name_loa
     else:
         print("Please provide a valid path to evaluate")
         exit(1)
+    device = torch.device(args.which_cuda)
+    model = model.to(device)
     model.eval()  # 设置为evaluation模式
     list_imgsPath = [image_test for image_test in glob.glob(dirpath_orginpics + "/*.JPG")]  # 读出所有文件夹的路径
     for i in range(len(list_imgsPath)):
@@ -86,7 +89,7 @@ if __name__ == '__main__':
 
     # 改名字
     # for jsonfile in origin_folders_paths:
-    loadModelName = "05-05_15-06Size224Best"
+    loadModelName = "05-16_10-20Size224Best"
     load_model = f'/home/wangjk/project/pyramid/modelParameter/{loadModelName}.pt'
     # pic_name = "测试专用.JPG"
     # pic_prefix = pic_name.split('.')[0]
@@ -98,7 +101,7 @@ if __name__ == '__main__':
     # model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.9]), torch.tensor([3.9]),
     model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0]), torch.tensor([1.0]), torch.tensor([1.0]),
                                                  torch.tensor([1.0]), torch.tensor([0.1])])#
-    device=torch.device("cuda:1")
+    device=torch.device("cuda:2")
     model = model.to(device)
     test_picture(origin_path,bin_path,model,load_model,loadModelName)
 

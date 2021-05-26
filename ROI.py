@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+# 旧版本，需要改动，孔洞填充函数错误
 # 功能：利用分割时生成的bin，生成mix图像。然后切分程单个叶片leave，矩形框rectangleImg。\
 # 修改内容：功能中提到的各个文件路径
 # 图像位置：classcification文件夹下，

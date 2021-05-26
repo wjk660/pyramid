@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -11,7 +13,7 @@ class PyramidNet(nn.Module):
     def __init__(self, n_layers, input_image_channels=3, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
         super(PyramidNet, self).__init__()
         # fixed number of channels throughout the network 网络中固定的通道数量
-        self.no_channels = 32
+        self.no_channels = 64 # 测试通道数影响
         self.no_rc_per_block = 4
 
         # first convolution sets the image to the 'correct' number of channels
@@ -24,8 +26,8 @@ class PyramidNet(nn.Module):
         for i in range(n_layers):
             self.upsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
             self.downsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
-            self.pre_loss_convs.append(nn.Sequential( #todo:为什么用这个计算loss
-                nn.ReLU(inplace=False),
+            self.pre_loss_convs.append(nn.Sequential( # 网络在各个层输出的是多通道的，在这里要合并成单通道的
+                nn.ReLU(inplace=False), # 这里应该是必须用inplace=False，不然会修改原始的特征图矩阵
                 nn.Conv2d(self.no_channels, output_channels, 3, padding=1)  # todo 1x1 conv instead?
             ))
         # add one more upsample block 上采样块多加了一层，也就是说最上面的A在了上采样的过程中
@@ -55,7 +57,7 @@ class PyramidNet(nn.Module):
         multiscale_predictions = []
         # first upsample block has no summing of map from downsampled
         x = self.upsample_blocks[0](x)
-        x = nn.Upsample(scale_factor=2.0, mode='nearest')(x)
+        x = nn.Upsample(scale_factor=2.0, mode='nearest')(x) # 上采样算法可选：'nearest', 'linear', 'bilinear', 'bicubic' and 'trilinear'
         # [print(d.shape) for d in downsampled]
         for i, layer in enumerate(self.upsample_blocks[1:]):# upsample_blocks[0]是最顶端的结构，没有求和操作
             # sum map coming from correspondent downsample layer  来自对应的下采样层
@@ -65,7 +67,7 @@ class PyramidNet(nn.Module):
             diffY = torch.tensor([x2.size()[2] - x1.size()[2]])
             diffX = torch.tensor([x2.size()[3] - x1.size()[3]])
 
-            x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+            x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2, # torch.nn.functional.pad()可以从最后面的维度开始两个一组，扩大维度
                             diffY // 2, diffY - diffY // 2])
             # x = x + downsampled[-i - 1]  # todo concat here?
             x = x1 + x2  # todo concat here?
@@ -90,18 +92,54 @@ class PyramidNet(nn.Module):
     # A mask is applied to the loss so that unlabeled pixels are ignored.将掩码应用于损失，以便忽略未标记的像素。
     def compute_multiscale_loss(self, multiscale_prediction, multiscale_targets, multiscale_masks):
         # reduction logic: mask is applied afterwards on the non-reduced loss
+        # losses = [torch.sum(self.losses[i](x, y * mask)) / torch.sum(mask) for i, (x, y, mask) in
+        #           # loss计算：loss(input, target)
+        #           enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks))]  # todo：为什么这么计算loss
+        # xx=sum(losses)
+        # losses = [torch.sum(self.losses[i](x, y * mask))  for i, (x, y, mask) in
+        #           # loss计算：loss(input, target)
+        #           enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks))]  # todo：为什么这么计算loss
+        # xx=sum(losses)
         losses = [torch.sum(self.losses[i](x, y) * mask) / torch.sum(mask) for i, (x, y, mask) in  # loss计算：loss(input, target)
                   enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks))]# todo：为什么这么计算loss
+        # losses = [torch.sum(self.losses[i](x, y) * mask) / torch.sum(mask) for i, (x, y, mask) in
+        #           # loss计算：loss(input, target)
+        #           enumerate(zip(multiscale_prediction[-1], multiscale_targets[-1], multiscale_masks[-1]))]  # todo：为什么这么计算loss
         # here sum will call overridden + operator
         return sum(losses)
 
+    # 新loss函数：考虑了连通性，以及更准确的考虑只标注了一部分label的问题
+    # todo:做实验
+    def compute_multiscale_loss_experiment(self, multiscale_prediction, multiscale_targets, multiscale_masks):
+        losses=[]
+        for i,(x,y,mask) in enumerate(zip(multiscale_prediction, multiscale_targets, multiscale_masks)):
+            # 交叉熵损失
+            loss1 = torch.sum(self.losses[i](x * mask, y * mask)) / torch.sum(mask)
+            # 计算预测结果九宫格内少于3个像素个数/总的不为0的像素数。目的：作为惩罚项
+            x_mask=x*mask
+            x_mask_bin=(x_mask>0.).float()
+            num_not_boundary_point=0
+            for ii in range(1, x_mask.shape[0]-1):
+                for jj in range(1, x_mask.shape[1]-1):
+                    if x_mask[ii][jj]!=0 and x_mask[ii-1][jj-1]+x_mask[ii-1][jj]+x_mask[ii-1][jj+1]+ x_mask[ii][jj-1]+x_mask[ii][jj]+x_mask[ii][jj+1]+x_mask[ii+1][jj-1]+x_mask[ii+1][jj]+x_mask[ii+1][jj+1]<3.0:
+                        num_not_boundary_point=num_not_boundary_point+1
+            ratio_not_boundary_point=1.0/math.log10(1.0/(num_not_boundary_point+0.000005))
+            # loss公式
+            Alpha=0.2  # Alpha：惩罚项的权重
+            loss=Alpha*ratio_not_boundary_point+(1-Alpha)*loss1
+            losses.append(loss)
+        return sum(losses) # todo:要直接返回总和吗？权重在别的地方计算过了是吗？
+
+
+
 
 if __name__ == '__main__':
-    faulthandler.enable()
+    # faulthandler.enable()
     net = PyramidNet(5, loss_weights=[torch.tensor([0.1]), torch.tensor([0.4]), torch.tensor([1.]),
                                       torch.tensor([4]), torch.tensor([10])])
-    writer = SummaryWriter('runs/pyramid_network')
-    writer.add_graph(net)
+    # writer = SummaryWriter('runs/pyramid_network')
+    # writer.add_graph(net)
+    # print("Total number of paramerters in networks is {}  ".format(sum(x.numel() for x in net.parameters())))
     # print(net)
     with torch.no_grad():
         x = torch.randn((2, 3, 128, 128), requires_grad=True)
@@ -114,5 +152,6 @@ if __name__ == '__main__':
             print(y.max().item(), y.min().item())
             plt.imshow(y[0].squeeze().numpy(), cmap='gray')
             plt.show()
-        loss = net.compute_multiscale_loss(ys, targets, masks)
-        # loss.backward()
+        loss = net.compute_multiscale_loss_experiment(ys, targets, masks)
+        loss.backward()
+        print(loss.item())

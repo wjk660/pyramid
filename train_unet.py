@@ -1,6 +1,6 @@
 import os
 import sys
-
+import testPic
 # import torch.nn as nn
 import time
 
@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from unet_model import UNet
-
+import args
 TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now()) # 添加时间戳解决，曲线显示紊乱的问题
 def evaluate(net, eval_dataset):
     net.eval()
@@ -45,9 +45,9 @@ def evaluate(net, eval_dataset):
                 print(f"Accuracy at scale in valset({p.shape[1]}x{p.shape[2]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
                 count = count + 1
                 sum_acc=sum_acc+acc
-    # writer_acc_val.add_scalar('acc',
-    #   sum_acc/count,
-    #   global_step=epoch)
+    writer_acc_val.add_scalar('acc',
+      sum_acc/count,
+      global_step=epoch)
     writer_loss_val.add_scalar('loss',
                       loss.item(),
                       global_step=epoch)
@@ -59,68 +59,42 @@ def compute_loss(prediction, target, mask):
     losses = [torch.sum(criterion(prediction, target) * mask) / torch.sum(mask) ]# todo：为什么这么计算loss
     # here sum will call overridden + operator
     return sum(losses)
-# 注意更改：epochs和saveModelName的值,train_prefix,val_prefix
-class args:
-    dataset_filepath = "/home/wangjk/dataset/DenseLeaves/gen/"
-    epochs = 2000
-    seed = 7
-    log_interval = 10
-    predictions_number = 5
-    save_path = "/home/wangjk/project/pyramid/modelParameter/"
-    # load_model = "pyramid_net_model.pt"
-    load_model = False
-    viz_results = False
-    patch_size = 256
-    train_prefix="own_instance_all" #训练集所在文件夹名称的前缀 训练集=前缀+patch_size
-    val_prefix="own_instance_val"
-
-# args = parse_args()
-saveModelName = f"Epoch{args.epochs}Pathsize{args.patch_size}BilinearUnet" #保存模型名称的前缀
-describe = f"epoch{args.epochs},patch_size = {args.patch_size}*{args.patch_size},add three pic that labeled all leaves"
-# 最终使用的训练集和验证集路径
-trainset_path= args.dataset_filepath + f'{args.train_prefix}{args.patch_size}'
-valset_path= args.dataset_filepath + f'{args.val_prefix}{args.patch_size}'
-# 之前没有文件夹,则抛异常程序停止
-if not os.path.exists(trainset_path):
-    raise RuntimeError("not have trainset")
-if not os.path.exists(valset_path):
-    raise RuntimeError("not have valset")
 
 if __name__ == '__main__':
+    print(f"start_train:{args.time_now}")
     sys.stdout = Logger("log/train.txt")
-    print (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-    print(describe)
-    device=torch.device("cuda:2")
-    torch.manual_seed(args.seed) #在神经网络中，参数默认是进行随机初始化的。如果不设置的话每次训练时的初始化都是随机的，导致结果不确定。
-    np.random.seed(args.seed)
-
+    # 最终使用的训练集和验证集路径
+    trainset_path = args.dataset_filepath + f'{args.train_prefix}{args.patch_size}'
+    valset_path = args.dataset_filepath + f'{args.val_prefix}{args.patch_size}'
+    # 之前没有文件夹,则抛异常程序停止
+    if not os.path.exists(trainset_path):
+        raise RuntimeError("not have trainset")
+    if not os.path.exists(valset_path):
+        raise RuntimeError("not have valset")
+    writer_loss_train = SummaryWriter(f'runs/loss_train/{args.prefix_of_modelName}')
+    writer_loss_val = SummaryWriter(f'runs/loss_val/{args.prefix_of_modelName}')
+    writer_acc_train = SummaryWriter(f'runs/acc_train/{args.prefix_of_modelName}')
+    writer_acc_val = SummaryWriter(f'runs/acc_val/{args.prefix_of_modelName}')
     # create dataloader
-    dataset = MSUDenseLeavesDataset(trainset_path, args.predictions_number)#尝试旋转
-    dataloader = DataLoader(dataset, batch_size=24)
-    # print(args.dataset_filepath,args.dataset_filepath[:-1])
-    # print(args.dataset_filepath,args.dataset_filepath[:-1] + '_eval', args.predictions_number)
-    # print(args.dataset_filepath[:-1]+ '_eval')
-    # filepath[-:1]莫名奇妙
-    # eval_dataloader = DataLoader(MSUDenseLeavesDataset(args.dataset_filepath[:-1] + '_eval\\', args.predictions_number),
-    #                              shuffle=True, batch_size=24)
-    eval_dataloader = DataLoader(MSUDenseLeavesDataset(valset_path, args.predictions_number),
-                                 shuffle=True, batch_size=24)
-    # todo totally arbitrary weights
-    # model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0])]*5)#, torch.tensor([1.1]), torch.tensor([1.8]),
-    model = UNet(n_channels=3, n_classes=1, bilinear=False)  # , torch.tensor([1.1]), torch.tensor([1.8]),
-    # torch.tensor([3.2]), torch.tensor([9.0])])
+    dataset_train = MSUDenseLeavesDataset(trainset_path, args.predictions_number,random_augmentation=False)#是否旋转
+    dataloader = DataLoader(dataset_train, batch_size=args.batch_size)
+    dataset_val=MSUDenseLeavesDataset(valset_path, args.predictions_number,random_augmentation=False)
+    eval_dataloader = DataLoader(dataset_val,batch_size=args.batch_size) # shuffle=True,
+
+    model = UNet(n_channels=3, n_classes=1, bilinear=True)
+    device = torch.device("cuda:3")
+    torch.manual_seed(args.seed)  # 在神经网络中，参数默认是进行随机初始化的。如果不设置的话每次训练时的初始化都是随机的，导致结果不确定。
+    np.random.seed(args.seed)
     if args.load_model: #如果加载之前生成的模型参数
-        model.load_state_dict(torch.load(args.load_model))
+        model.load_state_dict(torch.load(args.path_load_model))
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters())
     # optimizer = torch.optim.SGD(model.parameters(), 0.01, momentum=0.9)
     criterion = torch.nn.BCEWithLogitsLoss()
     viz = args.viz_results
-    writer_loss_train = SummaryWriter(f'runs/loss_train/{TIMESTAMP}{saveModelName}')
-    writer_loss_val = SummaryWriter(f'runs/loss_val/{TIMESTAMP}{saveModelName}')
-    # writer_acc_train = SummaryWriter(f'runs/acc_train/{TIMESTAMP}{saveModelName}')
-    # writer_acc_val = SummaryWriter(f'runs/acc_val/{TIMESTAMP}{saveModelName}')
+    # best_loss统计，初始化为正无穷
+    best_loss = float('inf')
     for epoch in range(0, args.epochs):
         count = 0
         sum_acc = 0
@@ -134,8 +108,8 @@ if __name__ == '__main__':
             predictions = model(input_batch)
 
             if batch_no % 10 == 0:  # predictions[-1]是分辨率最高的那个
-                print('\n',predictions[-1].max().item(), predictions[-1].min().item(), predictions[-1].sum().item())
-                print('\n',torch.sigmoid(predictions[-1]).max().item(), torch.sigmoid(predictions[-1]).min().item(),
+                print("predictions:max,min,sum",predictions[-1].max().item(), predictions[-1].min().item(), predictions[-1].sum().item())
+                print("sigmoid(predictions):max,min,sum",torch.sigmoid(predictions[-1]).max().item(), torch.sigmoid(predictions[-1]).min().item(),
                       torch.sigmoid(predictions[-1]).sum().item())
             # print(targets[0].max().item(), targets[0].min().item(), targets[0].sum().item())
             # print(masks[0].max().item(), masks[0].min().item(), masks[0].sum().item())
@@ -148,11 +122,20 @@ if __name__ == '__main__':
 
             if batch_no % args.log_interval == 0:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    epoch, batch_no*24, len(dataset),
-                           100. * batch_no * 24 / len(dataset), loss.item()))
+                    epoch, batch_no * (args.batch_size), len(dataset_train),
+                           100. * batch_no * (args.batch_size) / len(dataset_train), loss.item()))
 
                 evaluate(model, eval_dataloader)
-            torch.save(model.state_dict(), args.save_path+saveModelName+'.pt')
+            # 更新保存最优数据
+            if loss.item() < best_loss:
+                best_loss = loss.item()
+                torch.save(model.state_dict(), args.path_save_bestResult_model)
+            # 100轮保存一次
+            if epoch > 0 and epoch % 100 == 99:
+                saveModelName = args.prefix_of_modelName + f"Epoch{epoch}.pt"
+                path_save_model = args.save_path + saveModelName
+                torch.save(model.state_dict(), path_save_model)
+
             # visualize result
             if viz:
                 with torch.no_grad():
@@ -172,15 +155,20 @@ if __name__ == '__main__':
                 p = (p > 0.).float()
                 pixel_acc = (p * m) * t  # 先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
                 acc = pixel_acc.sum() / t.sum()
-                print(
-                    f"Accuracy at scale in trainset({p.shape[1]}x{p.shape[2]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
+                # 注释掉多余的输出，方便查看日志
+                # print(
+                #     f"Accuracy at scale in trainset({p.shape[1]}x{p.shape[2]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
                 count = count + 1
                 sum_acc = sum_acc + acc
-        # writer_acc_train.add_scalar('acc',
-        #                             sum_acc / count,
-        #                             global_step=epoch)
+        writer_acc_train.add_scalar('acc',
+                                    sum_acc / count,
+                                    global_step=epoch)
         writer_loss_train.add_scalar('loss',
                           loss.item(),
                           global_step=epoch)
-        # evalutation
+    # 输出模型名和描述的对应关系
+    with open(os.path.join(args.project_path, "model_des.log"), 'a+') as f:
+        f.write(args.prefix_of_modelName + "--->" + args.describe + '\n')
     writer_loss_train.close()
+    # 测试
+    testPic.test_picture(args.dirpath_orginpics,args.bin_outputPath,model,args.path_save_bestResult_model,args.name_bestResult_model)

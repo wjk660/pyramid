@@ -35,3 +35,9 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+if __name__ == '__main__':
+    model = UNet(n_channels=3, n_classes=1, bilinear=True)
+    print(model)
+    #model 为你要打印的参数模型
+    print("Total number of paramerters in networks is {}  ".format(sum(x.numel() for x in model.parameters())))
+

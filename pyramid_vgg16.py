@@ -6,10 +6,10 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 
-class PyramidNet(nn.Module):
+class PyramidVgg16(nn.Module):
 
     def __init__(self, n_layers, input_image_channels=3, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
-        super(PyramidNet, self).__init__()
+        super(PyramidVgg16, self).__init__()
         # fixed number of channels throughout the network 网络中固定的通道数量
         self.no_channels = 32
         self.no_rc_per_block = 4
@@ -97,7 +97,7 @@ class PyramidNet(nn.Module):
 
 
 if __name__ == '__main__':
-    model=PyramidNet(5, loss_weights=[torch.tensor([0.1]), torch.tensor([0.4]), torch.tensor([1.]),
+    model=PyramidVgg16(5, loss_weights=[torch.tensor([0.1]), torch.tensor([0.4]), torch.tensor([1.]),
                                       torch.tensor([4]), torch.tensor([10])])
     print(model)
     #model 为你要打印的参数模型
