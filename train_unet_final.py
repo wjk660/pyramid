@@ -17,6 +17,13 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import args
 import ruihua
+from tqdm import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+from unet_model import UNet
+import args
 TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now()) # 添加时间戳解决，曲线显示紊乱的问题
 def evaluate(net, eval_dataset):
     net.eval()
@@ -28,10 +35,11 @@ def evaluate(net, eval_dataset):
             targets = [t.to(device) for t in targets]
             masks = [t.to(device) for t in masks]
             predictions = net(image)
-            loss = net.compute_multiscale_loss_experiment(predictions, targets, masks)
+            loss = compute_loss(predictions, targets[-1], masks[-1])
+            # for i in range(len(predictions)):
+            #  print(predictions[i].shape, targets[i].shape, masks[i].shape)
             print('Eval Loss:', loss.item())
-
-            for p, t, m in zip(predictions, targets, masks):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
+            for p, t, m in zip(predictions, targets[-1], masks[-1]):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
                 p = (p>0.).float()
                 pixel_recall = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
                 recall = pixel_recall.sum() / t.sum()
@@ -49,40 +57,12 @@ def evaluate(net, eval_dataset):
     return final_val_loss,final_val_recall
     print('*'*50)
     # net.train() # 没用吧
-# 实验
-def evaluate_experiment(net, eval_dataset):
-    net.eval()
-    count = 0
-    sum_recall = 0
-    with torch.no_grad():
-        for batch_no, (image, targets, masks) in tqdm(enumerate(eval_dataset)):
-            image = image.to(device)
-            targets = [t.to(device) for t in targets]
-            masks = [t.to(device) for t in masks]
-            predictions = net(image)
-            loss = net.compute_multiscale_loss_experiment(predictions, targets, masks)
-            print('Eval Loss:', loss.item())
 
-            for p, t, m in zip(predictions[-1], targets[-1], masks[-1]):# predictions是模型的输出，值是0.255这种，targets和 masks是标签和掩码，值是0或1
-                p = (p>0.).float()
-                pixel_recall = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
-                recall = pixel_recall.sum() / t.sum()
-                # print(f"Accuracy at scale in valset({p.shape[2]}x{p.shape[3]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
-                count += 1
-                sum_recall += recall
-
-    writer_acc_val.add_scalar(f'recall/{args.prefix_of_modelName}',
-               sum_recall / count,
-               global_step=epoch)
-    writer_loss_val.add_scalar(f'loss/{args.prefix_of_modelName}',
-                      loss.item(),
-                      global_step=epoch)
-    final_val_loss=loss.item()
-    final_val_recall=sum_recall / count
-    return final_val_loss,final_val_recall
-    print('*'*50)
-    # net.train() # 没用吧
-
+def compute_loss(prediction, target, mask):
+    # reduction logic: mask is applied afterwards on the non-reduced loss
+    losses = [torch.sum(criterion(prediction, target) * mask) / torch.sum(mask) ]# todo：为什么这么计算loss
+    # here sum will call overridden + operator
+    return sum(losses)
 if __name__ == '__main__':
     print(f"start_train:{time.localtime()}")
     print(args.describe)
@@ -103,10 +83,10 @@ if __name__ == '__main__':
     eval_dataloader = DataLoader(dataset_val,batch_size=args.batch_size,num_workers=10)
 
     # todo totally arbitrary weights
-    model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0]), torch.tensor([1.0]), torch.tensor([1.0]),
-                                                 torch.tensor([1.0]), torch.tensor([1.0])])#
-    # model = PyramidNet(n_layers=7,
-    #                    loss_weights=[torch.tensor([1.0])]*7)#, torch.tensor([1.1]), torch.tensor([1.8]),
+    # model = PyramidNet(n_layers=5, loss_weights=[torch.tensor([1.0]), torch.tensor([1.0]), torch.tensor([1.0]),
+    #                                              torch.tensor([1.0]), torch.tensor([1.0])])#
+    model = UNet(n_channels=3, n_classes=1, bilinear=True)
+    criterion = torch.nn.BCEWithLogitsLoss()
     device=torch.device(args.which_cuda)
     torch.manual_seed(args.seed) #在神经网络中，参数默认是进行随机初始化的。如果不设置的话每次训练时的初始化都是随机的，导致结果不确定。
     np.random.seed(args.seed)
@@ -139,16 +119,12 @@ if __name__ == '__main__':
             input_batch = input_batch.to(device)
             targets = [t.to(device) for t in targets]
             masks = [t.to(device) for t in masks]
+            # print("Input shape:", input_batch.shape)
             predictions = model(input_batch)
 
-            if batch_no % 10 == 0:  # predictions[-1]是分辨率最高的那个
-                print("predictions:max,min,sum",predictions[-1].max().item(), predictions[-1].min().item(), predictions[-1].sum().item())
-                print("sigmoid(predictions):max,min,sum",torch.sigmoid(predictions[-1]).max().item(), torch.sigmoid(predictions[-1]).min().item(),
-                      torch.sigmoid(predictions[-1]).sum().item(),'\n')
-            # for i in range(len(predictions)):
-            #     print(predictions[i].shape, targets[i].shape, masks[i].shape)
-            loss = model.compute_multiscale_loss_experiment(predictions, targets, masks)
+            loss = compute_loss(prediction=predictions, target=targets[-1], mask=masks[-1])
             loss.backward()
+
             # print("Current Loss:", loss.item())
             optimizer.step()  # 执行单步优化
 
@@ -181,11 +157,14 @@ if __name__ == '__main__':
 
                     plt.imshow(p, cmap='Greys')
                     plt.show()
-            for p, t, m in zip(predictions[-1], targets[-1], masks[-1]):  # predictions是模型的输出，值是0.265这种，targets和 masks是标签和掩码，值是0或1
-                p = (p>0.).float()
-                pixel_recall = (p * m) * t #先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
-                recall = pixel_recall.sum() / t.sum()
+            for p, t, m in zip(predictions, targets[-1], masks[-1]):  # predictions是模型的输出，值是0.265这种，targets和 masks是标签和掩码，值是0或1
 
+                p = (p > 0.).float()
+                pixel_recall = (p * m) * t  # 先用掩码做与操作，因为只关注标注了的部分，只有这部分才有label，然后和targets做与，看看有没有标全
+                recall = pixel_recall.sum() / t.sum()
+                # 注释掉多余的输出，方便查看日志
+                # print(
+                #     f"Accuracy at scale in trainset({p.shape[1]}x{p.shape[2]}) is {acc} ({pixel_acc.sum()}/{t.sum()} edge pixels)")
                 count = count + 1
                 sum_recall=sum_recall+recall
                 # 注释掉多余的输出，方便查看日志
@@ -201,7 +180,7 @@ if __name__ == '__main__':
                           global_step=epoch)
         final_train_loss = loss.item()
         final_train_recall = sum_recall / count
-        final_val_loss,final_val_recall=evaluate_experiment(model, eval_dataloader)
+        final_val_loss,final_val_recall=evaluate(model, eval_dataloader)
     # 输出模型名和描述的对应关系
     with open(os.path.join(args.project_path,"model_des.log"), 'a+') as f:
         f.write(args.prefix_of_modelName+ "--->" +args.describe + '\n')

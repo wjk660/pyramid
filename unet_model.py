@@ -3,7 +3,7 @@
 import torch.nn.functional as F
 
 from unet_parts import *
-
+from torchsummary import summary
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
@@ -40,4 +40,4 @@ if __name__ == '__main__':
     print(model)
     #model 为你要打印的参数模型
     print("Total number of paramerters in networks is {}  ".format(sum(x.numel() for x in model.parameters())))
-
+    summary(model, (3, 224, 224))

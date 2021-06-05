@@ -90,6 +90,11 @@ class MSUDenseLeavesDataset(Dataset):
                                angle).squeeze().numpy()  # 作用：从数组的形状中删除单维度条目，即把shape中为1的维度去掉
                 mask = rotate(torch.from_numpy(mask).float(), angle).squeeze().numpy()# todo:这里label和mask变成二值图了？
 
+                plt.imshow(label)
+                plt.show()
+                plt.imshow(mask)
+                plt.show()
+
         # print((label.shape, mask.shape), (label.dtype, mask.dtype))
         # labels multiscale resizing
         targets, masks = multiscale_target(self.multiscale_loss_targets, label, mask)
@@ -157,7 +162,7 @@ def multiscale_target(n_targets, target, mask):  # target和mask是两维的nump
 
 if __name__ == '__main__':
     dataset = MSUDenseLeavesDataset('/home/wangjk/project/pyramid/data/gen/own_train224/', num_targets=5,
-                                    random_augmentation=True,
+                                    random_augmentation=False,
                                     augm_probability=1.0)
     dataloader = DataLoader(dataset, batch_size=24)
 

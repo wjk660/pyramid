@@ -27,8 +27,8 @@ def generate_edges_and_mask(image):
                     new_segm[i, j] = 1.0
                     mask[i, j] = 1.0
                 continue
-            if segm[i - 1, j] != segm[i + 1, j] or segm[i, j - 1] != segm[i, j + 1] or \
-                    segm[i + 1, j - 1] != segm[i - 1, j + 1] or segm[i - 1, j - 1] != segm[i + 1, j - 1]:  # now:改成正宗的8邻域
+            if segm[i , j]!=0 and (segm[i - 1, j] != segm[i + 1, j] or segm[i, j - 1] != segm[i, j + 1] or \
+                    segm[i + 1, j - 1] != segm[i - 1, j + 1] or segm[i - 1, j - 1] != segm[i + 1, j - 1]):  # 正宗的8邻域
                 new_segm[i, j] = 1.0
                 # mask[i, j] = 1.0
             if segm[i, j] != 0:
@@ -36,7 +36,7 @@ def generate_edges_and_mask(image):
     return new_segm, mask # 返回的边缘和掩码是两维矩阵，值浮点值是0或者1.0，不是整形。
 
 if __name__=="__main__":
-    path_testImgs="/home/wangjk/project/pyramid/testPic/labeled_pic" # 存放标注图片的文件夹
+    path_testImgs="/home/wangjk/project/pyramid/data/own_instancePic/test" # 存放标注图片的文件夹
     list=glob.glob(f"{path_testImgs}/*_seg.png")
     for imgpath in list:
         testImg = cv2.imread(imgpath)

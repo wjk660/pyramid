@@ -7,7 +7,7 @@ import faulthandler
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from FocalLoss import FocalLoss
-from torchsummary import summary
+
 class PyramidNet(nn.Module):
 
     def __init__(self, n_layers, input_image_channels=3, output_channels=1, loss_weights=None):  # n_layers=5 5层网络
@@ -17,7 +17,14 @@ class PyramidNet(nn.Module):
         self.no_rc_per_block = 4
 
         # first convolution sets the image to the 'correct' number of channels
-        self.conv1 = nn.Conv2d(input_image_channels, self.no_channels, (3, 3), padding=1)
+        self.conv1 = []
+
+        self.conv1.append(nn.Sequential(  # 网络在各个层输出的是多通道的，在这里要合并成单通道的
+            nn.Conv2d(input_image_channels, self.no_channels, (3, 3), padding=1),
+            nn.BatchNorm2d(self.no_channels),
+            nn.ReLU(inplace=False)
+        ))
+
 
         # create network structure创建网络结构
         self.upsample_blocks = []
@@ -27,8 +34,8 @@ class PyramidNet(nn.Module):
             self.upsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
             self.downsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
             self.pre_loss_convs.append(nn.Sequential( # 网络在各个层输出的是多通道的，在这里要合并成单通道的
-                nn.ReLU(inplace=False), # 这里应该是必须用inplace=False，不然会修改原始的特征图矩阵
                 nn.Conv2d(self.no_channels, output_channels, 1, padding=0)  # todo 1x1 conv instead?
+                nn.ReLU(inplace=False), # 这里应该是必须用inplace=False，不然会修改原始的特征图矩阵
             ))
         # add one more upsample block 上采样块多加了一层，也就是说最上面的A在了上采样的过程中
         self.upsample_blocks.append(self._create_rc_block(self.no_rc_per_block))
@@ -84,8 +91,9 @@ class PyramidNet(nn.Module):
     def _create_rc_block(self, number_of_rc):
         block = []
         for i in range(number_of_rc):
-            block.append(nn.LeakyReLU(inplace=False))
             block.append(nn.Conv2d(self.no_channels, self.no_channels, (3, 3), padding=1))
+            nn.BatchNorm2d(self.no_channels),
+            block.append(nn.ReLU(inplace=False))
 
         return nn.Sequential(*block)
 
@@ -158,7 +166,6 @@ if __name__ == '__main__':
     # writer.add_graph(net)
     print("Total number of paramerters in networks is {}  ".format(sum(x.numel() for x in net.parameters())))
     print(net)
-    summary(net, (3, 224, 224))
     with torch.no_grad():
         x = torch.randn((2, 3, 128, 128), requires_grad=True)
         targets = [torch.ones((2, s, s), requires_grad=True).unsqueeze(1) for s in [8, 16, 32, 64, 128]]

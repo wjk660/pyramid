@@ -2,32 +2,37 @@
 #train: 注意更改：epochs和saveModelName的值,train_prefix,val_prefix
 import time
 
-describe="data:只使用自己数据，224*224，分离train和val的数据集，不设置随机翻转。" \
-         "train_policy:从头开始训练，共10代，100代保存一次，最优结果为Best,无锐化，batch_size=24。" \
-         "network:5层网络,权值均为1.0。" \
-         "aim:测试改tensorboard"
+describe="data:自己不数据增强 ,224\t" \
+         "train_policy:共20代\t" \
+         "network:5层网络,权值均为1.0, 32通道。\t" \
+         "aim:1*1卷积作为输出,自己不数据增强,改变recall的定义"
+# describe="unet,自己数据，100代，模型只在最后一层输出，bilinear=true"
          # "aim:测试改loss公式后测试图像为纯黑，改回loss看看哪里的问题"
 # "aim:label不进行缩放,改动的dataset.py"
 # ”测试改acc,测试改变channel的影响“
 # "aim:对比测试中间层loss计算的重要性，随机翻转0.2。"只有最底层权值为1.0，其它均为0.1
 # "network:Unet,bilinear=True"\
 
-# train_prefix = "public_and_own_train"  # 训练集所在文件夹名称的前缀 训练集=前缀+patch_size
+# 数据集
+# train_prefix = " public_and_own_train"  # 训练集所在文件夹名称的前缀 训练集=前缀+patch_size
 # val_prefix = "public_and_own_val"
+# train_prefix = "own_train_aug_new"  # 训练集所在文件夹名称的前缀 训练集=前缀+patch_size
+# val_prefix = "own_val_aug_new"
 train_prefix = "own_train"  # 训练集所在文件夹名称的前缀 训练集=前缀+patch_size
 val_prefix = "own_val"
 patch_size = 224
-is_ruihua=False
+# 训练
+epochs = 20
+batch_size=32
+which_cuda="cuda:0"
 
 load_model=False
-epochs =10
-batch_size=24
-which_cuda="cuda:1"
-
+is_ruihua=False
 log_interval = 10  # 更新记录的频率
 predictions_number = 5 # 更改网络层数时要搞他
 
 dataset_filepath = "/home/wangjk/project/pyramid/data/gen/"
+# dataset_filepath = "/home/wangjk/project/pyramid/data/divide/"
 seed = 7
 save_path = "/home/wangjk/project/pyramid/modelParameter/"
 viz_results = False
